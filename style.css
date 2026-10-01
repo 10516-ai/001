@@ -13,3 +13,6 @@ html,body{margin:0;height:100%;overflow:hidden;background:#2c3e50;font-family:sy
 .modal.show{display:flex}
 .modal h1{margin:0;font-size:40px}.modal p{font-size:22px;margin:0 0 12px}
 .modal button{padding:12px 28px;font-size:18px;font-weight:800;border:0;border-radius:10px;background:#2ecc71;color:#fff}
+#mute-btn{position:absolute;bottom:10px;left:10px;width:40px;height:40px;border:0;border-radius:50%;background:#fff9;font-size:20px;z-index:2}
+#end-msg{font-size:16px!important;margin:0!important;opacity:.9;text-align:center;padding:0 20px}
+.modal.win h1{color:#2ecc71}
