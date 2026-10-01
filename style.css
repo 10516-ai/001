@@ -1,0 +1,15 @@
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{margin:0;height:100%;overflow:hidden;background:#2c3e50;font-family:system-ui,sans-serif;overscroll-behavior:none}
+#game-container{position:absolute;left:50%;top:50%;width:400px;height:620px;transform-origin:center;
+  background:linear-gradient(#fdf1d6,#f6d99a);border-radius:12px;overflow:hidden;box-shadow:0 8px 30px #0006}
+#game{display:block;width:100%;height:100%;touch-action:none}
+#score-board{position:absolute;top:10px;left:12px;font-weight:800;font-size:20px;color:#2c3e50;pointer-events:none;display:flex;flex-direction:column}
+#score-board small{font-size:12px;opacity:.7}
+#warning-overlay{position:absolute;left:0;right:0;top:110px;height:3px;background:#e74c3c;opacity:0;pointer-events:none;transition:opacity .2s}
+#warning-overlay.on{opacity:1;animation:blink .5s infinite alternate}
+@keyframes blink{to{opacity:.2}}
+#install-btn{position:absolute;bottom:10px;right:10px;padding:8px 12px;border:0;border-radius:8px;background:#2c3e50;color:#fff;font-weight:700}
+.modal{position:absolute;inset:0;background:#000a;color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.modal.show{display:flex}
+.modal h1{margin:0;font-size:40px}.modal p{font-size:22px;margin:0 0 12px}
+.modal button{padding:12px 28px;font-size:18px;font-weight:800;border:0;border-radius:10px;background:#2ecc71;color:#fff}
