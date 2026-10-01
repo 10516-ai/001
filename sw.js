@@ -1,5 +1,4 @@
-
-const CACHE = 'watermelon-v2';
+const CACHE = 'watermelon-v3';
 const MATTER = 'https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js';
 const ASSETS = ['./', './index.html', './style.css', './script.js', './manifest.json',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', MATTER];
