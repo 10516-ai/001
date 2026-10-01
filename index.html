@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Watermelon Merge Game</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2c3e50">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Watermelon">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+</head>
+<body>
+<div id="game-container">
+  <canvas id="game" width="400" height="620"></canvas>
+  <div id="score-board">SCORE: <span id="score">0</span><small>BEST: <span id="best">0</span></small></div>
+  <div id="warning-overlay"></div>
+  <button id="install-btn" hidden>ติดตั้งแอป</button>
+  <div id="end-screen" class="modal">
+    <h1 id="end-title">GAME OVER</h1>
+    <p>Score: <span id="final-score">0</span></p>
+    <button onclick="restartGame()">PLAY AGAIN</button>
+  </div>
+</div>
+<script src="script.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(r => console.log('SW registered:', r.scope))
+      .catch(e => console.error('SW failed:', e));
+  });
+}
+</script>
+</body>
+</html>
