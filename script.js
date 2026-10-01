@@ -1,6 +1,7 @@
 (() => {
 const { Engine, World, Bodies, Body, Events, Composite } = Matter;
-const W = 400, H = 620, LINE = 110, WALL = 40, FLOOR = H - 8, MAXLV = 9;
+const W = 400, H = 620, LINE = 110, WALL = 40, FLOOR0 = H - 8, MAXLV = 9;
+const RISE_EVERY = 10000, RISE_STEP = 15; // ทุก 10 วิ พื้นดันขึ้น 15px (ปรับความยากได้ที่นี่)
 const FRUITS = [
   {r:14,c:'#e74c3c',e:'🍒'},{r:20,c:'#ff6b81',e:'🍓'},{r:26,c:'#8e44ad',e:'🍇'},
   {r:33,c:'#f39c12',e:'🍊'},{r:41,c:'#e74c3c',e:'🍎'},{r:50,c:'#c8d86b',e:'🍐'},
@@ -14,6 +15,7 @@ const store = {
 };
 
 let engine, score, best = store.get('wm-best'), curLv, nextLv, aimX, canDrop, over, overTimer, last, acc;
+let floorBody, floorTop, riseTarget, riseTimer, lastTick, winPending;
 
 const rnd = () => Math.floor(Math.random() * 4);
 
@@ -25,26 +27,30 @@ function makeFruit(lv, x, y) {
 
 function init() {
   engine = Engine.create({ gravity: { y: 1.3 } });
+  floorTop = riseTarget = FLOOR0; riseTimer = 0; lastTick = 0; winPending = false;
+  floorBody = Bodies.rectangle(W / 2, floorTop + WALL / 2, W + WALL * 2, WALL, { isStatic: true });
   World.add(engine.world, [
-    Bodies.rectangle(W / 2, FLOOR + WALL / 2, W + WALL * 2, WALL, { isStatic: true }),
+    floorBody,
     Bodies.rectangle(-WALL / 2, H / 2, WALL, H * 3, { isStatic: true }),
     Bodies.rectangle(W + WALL / 2, H / 2, WALL, H * 3, { isStatic: true })
   ]);
   Events.on(engine, 'collisionStart', e => {
     for (const { bodyA: a, bodyB: b } of e.pairs) {
+      if (a.isStatic !== b.isStatic) { const f = a.isStatic ? b : a; if (f.speed > 4) sfx.thud(f.speed); }
       if (a.label !== 'fruit' || b.label !== 'fruit' || a.lv !== b.lv || a.dead || b.dead) continue;
       a.dead = b.dead = true;
       const x = (a.position.x + b.position.x) / 2, y = (a.position.y + b.position.y) / 2;
       Composite.remove(engine.world, [a, b]);
-      if (a.lv === MAXLV) { addScore(200); continue; } // แตงโม + แตงโม = โบนัส
       addScore((a.lv + 1) * 2);
+      sfx.merge(a.lv + 1);
       World.add(engine.world, makeFruit(a.lv + 1, x, y));
+      if (a.lv + 1 === MAXLV) { addScore(500); winPending = true; } // ได้แตงโม = ชนะ
     }
   });
   score = 0; over = false; overTimer = 0; canDrop = true; aimX = W / 2; acc = 0;
   curLv = rnd(); nextLv = rnd();
   $('score').textContent = 0; $('best').textContent = best;
-  $('end-screen').classList.remove('show'); $('warning-overlay').classList.remove('on');
+  $('end-screen').classList.remove('show', 'win'); $('warning-overlay').classList.remove('on');
 }
 
 function addScore(n) {
@@ -58,21 +64,52 @@ function drop() {
   const x = Math.min(W - r, Math.max(r, aimX));
   const f = makeFruit(curLv, x, 50);
   World.add(engine.world, f);
+  sfx.drop();
   curLv = nextLv; nextLv = rnd(); canDrop = false;
   setTimeout(() => { canDrop = true; }, 500);
 }
 
-function endGame() {
+function endGame(win, msg) {
   over = true;
   $('final-score').textContent = score;
-  $('end-title').textContent = score >= best && score > 0 ? 'NEW BEST!' : 'GAME OVER';
-  $('end-screen').classList.add('show');
+  $('end-title').textContent = win ? 'YOU WIN!' : 'GAME OVER';
+  $('end-msg').textContent = win ? 'ผสมแตงโมสำเร็จ!' : (msg || '');
+  $('warning-overlay').classList.remove('on');
+  const el = $('end-screen'); el.classList.toggle('win', !!win); el.classList.add('show');
+  win ? sfx.win() : sfx.lose();
 }
 window.restartGame = init;
 
+// ---------- Sound (สังเคราะห์ด้วย WebAudio ไม่ต้องใช้ไฟล์เสียง) ----------
+let AC, master, muted = !!store.get('wm-muted'), lastThud = 0;
+function audio() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = .5; master.connect(AC.destination); } catch { return null; } }
+  if (AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(f, d, type = 'sine', v = .2, f2 = f, delay = 0) {
+  if (muted || !audio()) return;
+  const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + d);
+  g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + d + .03);
+}
+const sfx = {
+  drop: () => tone(520, .09, 'sine', .18, 260),
+  thud: sp => { const n = performance.now(); if (n - lastThud < 70) return; lastThud = n; tone(140, .08, 'triangle', Math.min(.25, sp * .03), 70); },
+  merge: lv => { const f = 330 * Math.pow(2, lv / 6); tone(f, .14, 'triangle', .25, f * 1.5); tone(f * 1.5, .18, 'sine', .15, f * 2, .07); },
+  tick: () => tone(900, .06, 'square', .07),
+  rise: () => { tone(90, .55, 'sawtooth', .2, 45); tone(60, .55, 'square', .1, 35); },
+  win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, .3, 'triangle', .25, f, i * .12)),
+  lose: () => [392, 330, 262, 196].forEach((f, i) => tone(f, .3, 'sawtooth', .16, f * .9, i * .16))
+};
+const mb = $('mute-btn'), showMute = () => { mb.textContent = muted ? '🔇' : '🔊'; };
+mb.addEventListener('click', () => { muted = !muted; store.set('wm-muted', muted ? 1 : 0); showMute(); if (!muted) { audio(); sfx.tick(); } });
+showMute();
+
 // ---------- Input ----------
 const setAim = e => { const r = canvas.getBoundingClientRect(); aimX = (e.clientX - r.left) / r.width * W; };
-canvas.addEventListener('pointerdown', setAim);
+canvas.addEventListener('pointerdown', e => { setAim(e); audio(); });
 canvas.addEventListener('pointermove', setAim);
 canvas.addEventListener('pointerup', e => { setAim(e); drop(); });
 window.addEventListener('keydown', e => {
@@ -137,14 +174,13 @@ const DRAW = [
     [-.9,-.45,0,.45,.9].forEach(a => leaf(0, -r * .62, r * .5, -Math.PI / 2 + a, '#43a047'));
     face(0, r * .1, r * .9);
   },
-  r => { // grapes
-    stem(0, -r * .8, r * .1, -r * 1.05, 2.5); leaf(r * .1, -r * .98, r * .5, -.5, '#388e3c');
-    disc(0, r * .1, r * .9, '#5b2480', ['#3d1259', 2]);
-    const br = r * .4;
-    for (let k = 0; k < 6; k++) { const a = k * TAU / 6, x = Math.cos(a) * r * .52, y = r * .1 + Math.sin(a) * r * .52;
-      disc(x, y, br, grad(x, y, br, '#b57bd6', '#7b3fa6'), ['#4b1a6b', 1.2]); shine(x, y, br * .9); }
-    disc(0, r * .1, br, grad(0, r * .1, br, '#c28ae0', '#7b3fa6'), ['#4b1a6b', 1.2]);
-    face(0, r * .1, r * .85);
+  r => { // grapes: พวงองุ่นทรงสามเหลี่ยมหยดน้ำ (ไม่กลม)
+    stem(0, -r * .68, r * .08, -r * 1.02, 3); leaf(r * .04, -r * .82, r * .72, -.7, '#43a047');
+    const b = r * .26;
+    [[-.54,-.52],[-.18,-.52],[.18,-.52],[.54,-.52],[-.36,-.06],[0,-.06],[.36,-.06],[-.18,.4],[.18,.4],[0,.74]]
+      .forEach(([px, py]) => { const x = px * r, y = py * r;
+        disc(x, y, b, grad(x, y, b, '#cf94ec', '#6a2c91'), ['#3d1259', 1.3]); shine(x, y, b * .9); });
+    face(0, -r * .02, r * .75);
   },
   r => { // orange
     disc(0, 0, r * .95, grad(0, 0, r * .95, '#ffb347', '#e8710a'), ['#a8480a', 2]);
@@ -212,15 +248,24 @@ function drawFruit(lv, x, y, ang = 0, alpha = 1) {
 
 function render() {
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#0001'; ctx.fillRect(0, FLOOR, W, 8);
+  const fg = ctx.createLinearGradient(0, floorTop, 0, H); fg.addColorStop(0, '#8d6e63'); fg.addColorStop(1, '#4e342e');
+  ctx.fillStyle = fg; ctx.fillRect(0, floorTop, W, H - floorTop + 1);
+  ctx.fillStyle = '#b39286'; ctx.fillRect(0, floorTop, W, 4);
+  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2;
+  for (let y = floorTop + 26; y < H; y += 26) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
   ctx.setLineDash([8, 6]); ctx.strokeStyle = '#e74c3c88'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(0, LINE); ctx.lineTo(W, LINE); ctx.stroke(); ctx.setLineDash([]);
   if (!over) {
     const r = FRUITS[curLv].r, x = Math.min(W - r, Math.max(r, aimX));
-    ctx.strokeStyle = '#0002'; ctx.beginPath(); ctx.moveTo(x, 50); ctx.lineTo(x, FLOOR); ctx.stroke();
+    ctx.strokeStyle = '#0002'; ctx.beginPath(); ctx.moveTo(x, 50); ctx.lineTo(x, floorTop); ctx.stroke();
     if (canDrop) drawFruit(curLv, x, 50, 0, .9);
     ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('NEXT', W - 36, 18); drawFruit(nextLv, W - 36, 48);
+    const p = riseTimer / RISE_EVERY, bx = 165;
+    ctx.fillStyle = '#0002'; ctx.fillRect(bx, 8, 90, 8);
+    ctx.fillStyle = p > .7 ? '#e74c3c' : '#8d6e63'; ctx.fillRect(bx, 8, 90 * p, 8);
+    ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('RISE IN ' + Math.max(0, Math.ceil((RISE_EVERY - riseTimer) / 1000)) + 's', bx + 45, 30);
   }
   for (const b of Composite.allBodies(engine.world)) if (b.label === 'fruit') drawFruit(b.lv, b.position.x, b.position.y, b.angle);
 }
@@ -232,14 +277,23 @@ function frame(t) {
   const dt = Math.min(t - (last || t), 100); last = t;
   if (!over) {
     acc += dt;
+    riseTimer += dt;
+    const left = Math.ceil((RISE_EVERY - riseTimer) / 1000);
+    if (left !== lastTick && left >= 1 && left <= 3) sfx.tick();
+    lastTick = left;
+    if (riseTimer >= RISE_EVERY) { riseTimer = 0; riseTarget -= RISE_STEP; sfx.rise(); }
+    if (floorTop > riseTarget) floorTop = Math.max(riseTarget, floorTop - 40 * dt / 1000);
+    Body.setPosition(floorBody, { x: W / 2, y: floorTop + WALL / 2 });
     while (acc >= STEP) { Engine.update(engine, STEP); acc -= STEP; }
     let warn = false;
     for (const b of Composite.allBodies(engine.world)) {
       if (b.label === 'fruit' && t - b.born > 1500 && b.position.y - FRUITS[b.lv].r < LINE && b.speed < 1.5) warn = true;
     }
     overTimer = warn ? overTimer + dt : 0;
-    $('warning-overlay').classList.toggle('on', warn);
-    if (overTimer > 2000) endGame();
+    $('warning-overlay').classList.toggle('on', warn || floorTop - LINE < 90);
+    if (winPending) endGame(true);
+    else if (floorTop <= LINE) endGame(false, 'พื้นดันถึงเส้นก่อนผสมแตงโมได้');
+    else if (overTimer > 2000) endGame(false, 'ผลไม้ล้นเกินเส้น');
   }
   render();
 }
