@@ -19,9 +19,11 @@
   <canvas id="game" width="400" height="620"></canvas>
   <div id="score-board">SCORE: <span id="score">0</span><small>BEST: <span id="best">0</span></small></div>
   <div id="warning-overlay"></div>
+  <button id="mute-btn" aria-label="sound">🔊</button>
   <button id="install-btn" hidden>ติดตั้งแอป</button>
   <div id="end-screen" class="modal">
     <h1 id="end-title">GAME OVER</h1>
+    <p id="end-msg"></p>
     <p>Score: <span id="final-score">0</span></p>
     <button onclick="restartGame()">PLAY AGAIN</button>
   </div>
